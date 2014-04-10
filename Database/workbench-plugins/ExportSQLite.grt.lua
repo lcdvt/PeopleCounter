@@ -1,5 +1,6 @@
 -- ExportSQLite: SQLite export plugin for MySQL Workbench
--- Copyright (C) 2009 Thomas Henlich
+-- Copyright (C) 2009 created by Thomas Henlich - http://www.henlich.de/
+-- Copyright (C) 2013 modified by Tony Beltramelli - http://www.tonybeltramelli.com/
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
@@ -13,7 +14,6 @@
 --
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 --
 -- this function is called first by MySQL Workbench core to determine number of plugins in this module and basic plugin info
 -- see the comments in the function body and adjust the parameters as appropriate
@@ -22,8 +22,8 @@
 function getModuleInfo()
   return {
     name= "ExportSQLite",
-    author= "Thomas Henlich",
-    version= "2009.12.02",
+    author= "Thomas Henlich, Tony Beltramelli",
+    version= "2013.08.05",
     implements= "PluginInterface",
     functions= {
       "getPluginInfo:l<o@app.Plugin>:",
@@ -183,7 +183,8 @@ function exportTable(file, dbName, schema, tbl)
   local primaryKey, pKColumn, colComment
   -- cannot create empty tables
   if (grtV.getn(tbl.columns) > 0) then
-    file:write("CREATE TABLE " .. dbName .. dq(tbl.name) .. "(\n" .. sCommentFormat(tbl.comment))
+  	file:write("DROP TABLE IF EXISTS " .. dbName .. dq(tbl.name) .. ";\n\n")
+    file:write("CREATE TABLE IF NOT EXISTS " .. dbName .. dq(tbl.name) .. "(\n" .. sCommentFormat(tbl.comment))
 
     -- find the primary key
     for k = 1, grtV.getn(tbl.indices) do
@@ -305,8 +306,8 @@ function exportTable(file, dbName, schema, tbl)
       if (fKey.name ~= "") then
         file:write("  CONSTRAINT " .. dq(fKey.name) .. "\n  ")
       end
-      file:write("  FOREIGN KEY(" .. printFKColumns(fKey.columns) .. ")\n");
-      file:write("    REFERENCES " .. dq(fKey.referencedTable.name) .. "(" .. printFKColumns(fKey.referencedColumns) .. ")");
+      file:write("  FOREIGN KEY(" .. printFKColumns(fKey.columns) .. ")\n")
+      file:write("    REFERENCES " .. dq(fKey.referencedTable.name) .. "(" .. printFKColumns(fKey.referencedColumns) .. ")")
       if (fKey.deleteRule == "RESTRICT" or fKey.deleteRule == "CASCADE" or fKey.deleteRule == "SET NULL") then
         file:write("\n    ON DELETE " .. fKey.deleteRule)
       end
@@ -318,7 +319,10 @@ function exportTable(file, dbName, schema, tbl)
       end
     end
     
-    file:write(commentFormat(colComment) .. "\n);\n");
+    file:write(commentFormat(colComment) .. "\n);\n")
+    if(grtV.getn(tbl.indices) <= 1) then
+    	file:write("\n")
+    end
     
     -- CREATE INDEX statements for
     -- all non-primary, non-unique, non-foreign indexes 
@@ -333,6 +337,9 @@ function exportTable(file, dbName, schema, tbl)
         end
         file:write("CREATE INDEX " .. dbName .. dq(indexName) .. " ON " .. dq(tbl.name) .. "(")
         file:write(printIndexColumns(index) .. ");\n")
+        if (k == grtV.getn(tbl.indices)) then
+        	file:write("\n")
+        end        
       end
     end
 
@@ -382,7 +389,7 @@ function exportTable(file, dbName, schema, tbl)
           return 1
         end
       end
-      file:write("INSERT INTO " .. dq(tbl.name) .. "(");
+      file:write("INSERT INTO " .. dq(tbl.name) .. "(")
       for k = 1, lastColumn do
         if (k > 1) then
           file:write(",")
@@ -452,9 +459,9 @@ function exportSchema(file, schema, isMainSchema)
       dbName = ""
     else
       dbName = dq(schema.name) .. "."
-      file:write('ATTACH "' .. safeFileName(schema.name .. ".sdb") .. '" AS ' .. dq(schema.name) .. ";\n")
+      file:write('ATTACH "' .. safeFileName(schema.name .. ".sdb") .. '" AS ' .. dq(schema.name) .. ';\n')
     end
-    file:write("BEGIN;\n")
+    file:write("BEGIN;\n\n")
 
     -- find a valid table order for inserts from FK constraints
     local unOrdered = {}
